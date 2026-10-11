@@ -1,0 +1,48 @@
+name: Release
+
+# Push a tag like v0.2.0 to publish browser extension zips to GitHub Releases
+# and the API image to GitHub Container Registry.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  extensions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gramwritingly/core build
+      - run: pnpm -r run test
+      - run: pnpm --filter @gramwritingly/extension package
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: apps/extension/artifacts/*.zip
+          generate_release_notes: true
+
+  api-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/api:latest

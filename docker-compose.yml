@@ -1,0 +1,45 @@
+# Runs the whole stack locally:  cp .env.example .env  &&  docker compose up --build
+# Web editor: http://localhost:5173   API: http://localhost:8787   LanguageTool: internal only
+services:
+  languagetool:
+    image: erikvl87/languagetool:latest
+    restart: unless-stopped
+    environment:
+      Java_Xms: 512m
+      Java_Xmx: 1500m
+    # Optional: mount n-gram data for better confusion-word detection (their/there, effect/affect)
+    # volumes:
+    #   - ./data/ngrams:/ngrams
+    # environment:
+    #   langtool_languageModel: /ngrams
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LANGUAGETOOL_URL: http://languagetool:8010
+      DATABASE_PATH: /data/gramwritingly.db
+    ports:
+      - "8787:8787"
+    volumes:
+      - api-data:/data
+    depends_on:
+      - languagetool
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8787
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  api-data:

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <title>Gramwritingly</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-32.png" width="22" height="22" alt="" />
+      <strong>Gramwritingly</strong>
+      <span id="server" class="warn">Checking…</span>
+    </header>
+
+    <section>
+      <label class="row"><span>Check my writing</span><input type="checkbox" id="enabled" /></label>
+      <label class="row"><span>On <b id="site-name">this site</b></span><input type="checkbox" id="site" /></label>
+      <label class="row"><span>Readability highlights</span><input type="checkbox" id="readability" /></label>
+      <label class="row">
+        <span>Language</span>
+        <select id="language">
+          <option value="en-AU">English (Australia)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-NZ">English (New Zealand)</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-CA">English (Canada)</option>
+          <option value="en-ZA">English (South Africa)</option>
+        </select>
+      </label>
+    </section>
+
+    <section id="signed-in" hidden>
+      <p><span id="email"></span> <span id="plan" class="pill"></span></p>
+      <p class="muted" id="credits"></p>
+      <button id="logout" class="link">Sign out</button>
+    </section>
+
+    <section id="signed-out">
+      <p class="muted">Sign in for AI rewrites, your dictionary, style guide and snippets.</p>
+      <form id="login">
+        <input id="login-email" type="email" placeholder="Email" required autocomplete="email" />
+        <input id="login-password" type="password" placeholder="Password" required autocomplete="current-password" />
+        <button class="primary">Sign in</button>
+        <p id="error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <footer>
+      <a id="open-editor" target="_blank" rel="noreferrer">Open the editor</a>
+      <a href="#" id="open-options">Settings</a>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

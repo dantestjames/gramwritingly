@@ -1,0 +1,24 @@
+{
+  "name": "gramwritingly",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time spelling, grammar, style and AI writing help for the web, browsers and desktop apps.",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter ./packages/** run build && pnpm -r --filter ./apps/** run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "dev:server": "pnpm --filter @gramwritingly/server dev",
+    "dev:web": "pnpm --filter @gramwritingly/web dev",
+    "build:extension": "pnpm --filter @gramwritingly/extension build",
+    "package:extension": "pnpm --filter @gramwritingly/extension package"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

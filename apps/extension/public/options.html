@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <title>Gramwritingly settings</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>body { width: auto; max-width: 520px; margin: 24px auto; } label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }</style>
+  </head>
+  <body>
+    <h1>Gramwritingly settings</h1>
+    <form id="form">
+      <label>Server address<input id="api-url" type="url" required /></label>
+      <label>Editor address<input id="web-url" type="url" required /></label>
+      <button class="primary">Save</button>
+      <p id="saved" class="muted" role="status"></p>
+    </form>
+    <p class="muted">Your text is sent only to the server above for checking. It is not stored unless you save a document in the editor.</p>
+    <script src="options.js"></script>
+  </body>
+</html>

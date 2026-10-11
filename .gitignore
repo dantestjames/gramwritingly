@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+data/*.db
+data/*.db-*
+apps/extension/artifacts/
+apps/desktop/src-tauri/target/
+.DS_Store
+coverage/
