@@ -152,4 +152,6 @@ pnpm typecheck
 
 ## Licence
 
-Proprietary. All rights reserved.
+Released into the public domain under [CC0 1.0](LICENSE). Use it however you like.
+
+Third-party services keep their own terms: LanguageTool is LGPL, and the Claude API and Copyleaks need your own accounts.

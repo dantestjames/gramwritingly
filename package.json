@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Real-time spelling, grammar, style and AI writing help for the web, browsers and desktop apps.",
-  "license": "UNLICENSED",
+  "license": "CC0-1.0",
   "packageManager": "pnpm@10.18.0",
   "engines": {
     "node": ">=22.13"

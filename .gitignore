@@ -11,3 +11,4 @@ apps/extension/artifacts/
 apps/desktop/src-tauri/target/
 .DS_Store
 coverage/
+out/
