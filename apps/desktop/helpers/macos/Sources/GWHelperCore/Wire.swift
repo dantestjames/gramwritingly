@@ -84,6 +84,8 @@ public enum InMessage: Equatable {
     case issues(seq: Int, issues: [WireIssue])
     case rewriteResult(requestId: Int, variants: [String], error: String?)
     case requestTrust
+    /// Asks the helper to report its state again (the app's window may have loaded late).
+    case hello
     case quit
 
     private struct Envelope: Decodable { let type: String }
@@ -106,6 +108,8 @@ public enum InMessage: Equatable {
             }
         case "request-trust":
             return .requestTrust
+        case "hello":
+            return .hello
         case "quit":
             return .quit
         default:

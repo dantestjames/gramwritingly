@@ -25,6 +25,11 @@
         <li>Come back here. It updates on its own.</li>
       </ol>
       <button id="grant" class="primary">Open settings</button>
+      <p class="muted">Already on? Select Gramwritingly in that list, click the minus button to remove it, then choose Open settings again and turn it back on. Each new download needs this once.</p>
+      <div id="trust-restart" hidden>
+        <p>macOS has given access. The checker needs a restart to use it.</p>
+        <button id="restart" class="primary">Restart the checker</button>
+      </div>
     </section>
 
     <section id="status-box">
@@ -35,12 +40,20 @@
     <section>
       <h2>Account</h2>
       <div id="signed-out">
-        <form id="login">
-          <input id="email" type="email" placeholder="Email" autocomplete="email" required />
-          <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
-          <button class="primary">Sign in</button>
-        </form>
-        <p class="muted">Signing in adds your dictionary, style guide and AI rewrites.</p>
+        <div id="no-server" hidden>
+          <p>No Gramwritingly server at <code id="server-url"></code>, so you can't sign in yet.</p>
+          <p class="muted">You don't need an account. Spelling variants, clichés, redundancies and style checks work offline. Grammar checks and AI rewrites arrive once a server is running. Set its address under Server below.</p>
+        </div>
+        <div id="account-forms">
+          <form id="login">
+            <input id="name" type="text" placeholder="Your name" autocomplete="name" hidden />
+            <input id="email" type="email" placeholder="Email" autocomplete="email" required />
+            <input id="password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" minlength="8" required />
+            <button id="login-button" class="primary">Sign in</button>
+          </form>
+          <button id="toggle-register" class="link">New here? Create a free account</button>
+          <p class="muted">An account adds your dictionary, style guide and AI rewrites.</p>
+        </div>
       </div>
       <div id="signed-in" hidden>
         <p><span id="who"></span> <span id="plan" class="pill"></span></p>
@@ -71,6 +84,14 @@
         <summary>Server</summary>
         <label class="stack"><span>API address</span><input id="api-url" type="url" /></label>
         <label class="stack"><span>Editor address</span><input id="web-url" type="url" /></label>
+      </details>
+    </section>
+
+    <section>
+      <details>
+        <summary>Diagnostics</summary>
+        <pre id="log"></pre>
+        <button id="copy-log" class="link">Copy diagnostics</button>
       </details>
     </section>
 

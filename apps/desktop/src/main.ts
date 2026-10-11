@@ -76,7 +76,18 @@ type HelperMessage =
 
 let helperAlive = false;
 let trusted = false;
+let appTrusted = false;
 let lastSource: "server" | "local" | null = null;
+let serverReachable: boolean | null = null;
+const logLines: string[] = [];
+
+function log(line: string) {
+  const stamp = new Date().toLocaleTimeString("en-AU");
+  logLines.push(`${stamp}  ${line}`);
+  if (logLines.length > 60) logLines.shift();
+  const box = document.getElementById("log");
+  if (box) box.textContent = logLines.join("\n");
+}
 
 function send(msg: Record<string, unknown>) {
   return invoke("helper_send", { line: JSON.stringify(msg) }).catch((err) => setStatus(String(err)));
@@ -98,7 +109,9 @@ async function onHelper(raw: string) {
     case "trust":
       helperAlive = true;
       trusted = msg.trusted;
+      log(`helper ${msg.type}: trusted=${msg.trusted}`);
       if (msg.type === "ready") sendConfig();
+      appTrusted = await invoke<boolean>("app_trusted").catch(() => false);
       renderStatus();
       break;
     case "text": {
@@ -129,11 +142,21 @@ async function onHelper(raw: string) {
       }
       break;
     case "exited":
+      // Only sent for an unexpected exit. Restart once after a pause; never in a tight loop.
       helperAlive = false;
       renderStatus();
-      setTimeout(() => invoke("helper_start").catch(() => undefined), 2000);
+      restartHelper(5000);
       break;
   }
+}
+
+let restartTimer: number | undefined;
+function restartHelper(delay: number) {
+  clearTimeout(restartTimer);
+  restartTimer = window.setTimeout(() => {
+    log("starting helper");
+    invoke("helper_start").catch((err) => log(`could not start helper: ${err}`));
+  }, delay);
 }
 
 // ---- UI -------------------------------------------------------------------
@@ -143,16 +166,33 @@ function setStatus(text: string) {
 
 function renderStatus() {
   $("trust").hidden = !helperAlive || trusted;
-  if (!helperAlive) return setStatus("The text helper isn't running.");
-  if (!trusted) return setStatus("Waiting for Accessibility access.");
+  // macOS sometimes grants access to the app but only applies it to processes started afterwards.
+  $("trust-restart").hidden = !appTrusted;
+  if (!helperAlive) return setStatus("Starting the text checker…");
+  if (!trusted) {
+    return setStatus(appTrusted ? "Access granted. Restart the checker to use it." : "Waiting for Accessibility access.");
+  }
   if (!settings.enabled) return setStatus("Paused. Turn it back on with the switch above.");
   setStatus(lastSource === "local" ? "Checking (offline: style checks only)" : "Checking your writing in other apps.");
+}
+
+async function checkServer() {
+  try {
+    await api("/health");
+    serverReachable = true;
+  } catch {
+    serverReachable = false;
+  }
+  $("no-server").hidden = serverReachable !== false;
+  $("server-url").textContent = settings.apiUrl;
+  $("account-forms").hidden = serverReachable === false;
 }
 
 async function renderAccount() {
   const signedIn = !!settings.token;
   $("signed-in").hidden = !signedIn;
   $("signed-out").hidden = signedIn;
+  await checkServer();
   if (!signedIn) return;
   try {
     const me = await api<{ user: { email: string }; plan: { name: string } }>("/me");
@@ -189,7 +229,10 @@ function bindSettings() {
   const webUrl = $<HTMLInputElement>("web-url");
   apiUrl.value = settings.apiUrl;
   webUrl.value = settings.webUrl;
-  apiUrl.addEventListener("change", () => save({ apiUrl: apiUrl.value.trim().replace(/\/$/, "") }));
+  apiUrl.addEventListener("change", () => {
+    save({ apiUrl: apiUrl.value.trim().replace(/\/$/, "") });
+    renderAccount();
+  });
   webUrl.addEventListener("change", () => save({ webUrl: webUrl.value.trim().replace(/\/$/, "") }));
 
   const autostart = $<HTMLInputElement>("autostart");
@@ -197,15 +240,28 @@ function bindSettings() {
   autostart.addEventListener("change", () => (autostart.checked ? enable() : disable()).catch(() => undefined));
 
   $("grant").addEventListener("click", () => send({ type: "request-trust" }));
+  $("restart").addEventListener("click", () => restartHelper(0));
+  $("copy-log").addEventListener("click", () => navigator.clipboard.writeText(logLines.join("\n")).catch(() => undefined));
+
+  let registering = false;
+  $("toggle-register").addEventListener("click", () => {
+    registering = !registering;
+    $("name").hidden = !registering;
+    $("login-button").textContent = registering ? "Create account" : "Sign in";
+    $("toggle-register").textContent = registering ? "Already have an account? Sign in" : "New here? Create a free account";
+    $<HTMLInputElement>("password").autocomplete = registering ? "new-password" : "current-password";
+  });
   $("open-editor").addEventListener("click", () => openUrl(settings.webUrl));
 
   $("login").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("error").textContent = "";
     try {
-      const r = await api<{ token: string }>("/auth/login", {
+      const registering = !$("name").hidden;
+      const r = await api<{ token: string }>(registering ? "/auth/register" : "/auth/login", {
         email: $<HTMLInputElement>("email").value,
         password: $<HTMLInputElement>("password").value,
+        ...(registering ? { name: $<HTMLInputElement>("name").value } : {}),
       });
       save({ token: r.token });
       await renderAccount();
@@ -223,6 +279,7 @@ async function main() {
   bindSettings();
   renderAccount();
   await listen<string>("helper-message", (e) => onHelper(e.payload));
+  await listen<string>("helper-log", (e) => log(e.payload));
   await listen("tray-toggle", () => {
     save({ enabled: !settings.enabled });
     $<HTMLInputElement>("enabled").checked = settings.enabled;
@@ -230,10 +287,18 @@ async function main() {
     renderStatus();
   });
   await listen("tray-open-editor", () => openUrl(settings.webUrl));
-  // The helper may have said "ready" before this page loaded; ask it to start fresh.
+  // The helper usually starts before this page loads, so its first "ready" is missed.
+  // Ask it to say hello again; only start a new one if nothing answers.
+  send({ type: "hello" });
   setTimeout(() => {
-    if (!helperAlive) invoke("helper_start").catch((err) => setStatus(String(err)));
-  }, 1500);
+    if (!helperAlive) restartHelper(0);
+  }, 3000);
+  // Picks up permission changes made in System Settings while the window was open.
+  window.addEventListener("focus", async () => {
+    appTrusted = await invoke<boolean>("app_trusted").catch(() => false);
+    if (helperAlive && !trusted) send({ type: "hello" });
+    renderStatus();
+  });
   renderStatus();
 }
 

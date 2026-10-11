@@ -14,6 +14,10 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(issues.first?.replacements, ["There"])
     }
 
+    func testParsesHello() {
+        XCTAssertEqual(InMessage.parse(#"{"type":"hello"}"#), .hello)
+    }
+
     func testIgnoresJunk() {
         XCTAssertNil(InMessage.parse("not json"))
         XCTAssertNil(InMessage.parse(#"{"type":"mystery"}"#))

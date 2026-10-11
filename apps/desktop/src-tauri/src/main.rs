@@ -5,6 +5,7 @@
 // the shared TypeScript engine does the actual checking.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -14,8 +15,27 @@ use tauri::{
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+/// The running helper, plus a generation counter so that a helper we deliberately replaced
+/// doesn't report "exited" and trigger yet another restart.
 #[derive(Default)]
-struct Helper(Mutex<Option<CommandChild>>);
+struct Helper(Mutex<Option<CommandChild>>, AtomicU64);
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXIsProcessTrusted() -> u8;
+}
+
+/// Whether macOS has given the app itself Accessibility access (for diagnostics).
+#[tauri::command]
+fn app_trusted() -> bool {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        AXIsProcessTrusted() != 0
+    }
+    #[cfg(not(target_os = "macos"))]
+    false
+}
 
 /// Sends one JSON line to the helper's stdin.
 #[tauri::command]
@@ -40,6 +60,7 @@ fn spawn_helper(app: &AppHandle) -> Result<(), String> {
         return Err("The text helper is only available on macOS so far.".into());
     }
     let state = app.state::<Helper>();
+    let generation = state.1.fetch_add(1, Ordering::SeqCst) + 1;
     if let Some(old) = state.0.lock().map_err(|e| e.to_string())?.take() {
         let _ = old.kill();
     }
@@ -67,8 +88,17 @@ fn spawn_helper(app: &AppHandle) -> Result<(), String> {
                         let _ = handle.emit("helper-message", std::mem::take(&mut pending));
                     }
                 }
-                CommandEvent::Stderr(bytes) => eprintln!("{}", String::from_utf8_lossy(&bytes).trim_end()),
+                CommandEvent::Stderr(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes).trim_end().to_string();
+                    eprintln!("{text}");
+                    let _ = handle.emit("helper-log", text);
+                }
                 CommandEvent::Terminated(status) => {
+                    // A helper we replaced on purpose: stay quiet.
+                    if handle.state::<Helper>().1.load(Ordering::SeqCst) != generation {
+                        break;
+                    }
+                    let _ = handle.emit("helper-log", format!("helper exited: code {:?}, signal {:?}", status.code, status.signal));
                     let _ = handle.emit(
                         "helper-message",
                         serde_json::json!({ "type": "exited", "code": status.code }).to_string(),
@@ -99,7 +129,7 @@ fn main() {
             None,
         ))
         .manage(Helper::default())
-        .invoke_handler(tauri::generate_handler![helper_send, helper_start])
+        .invoke_handler(tauri::generate_handler![helper_send, helper_start, app_trusted])
         .setup(|app| {
             // Menu bar app: no Dock icon.
             #[cfg(target_os = "macos")]

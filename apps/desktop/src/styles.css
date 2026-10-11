@@ -41,3 +41,8 @@ select { width: auto; }
 .switch { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 details summary { cursor: pointer; color: var(--soft); padding: 6px 0; }
 footer { display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; }
+
+input[type="text"] { font: inherit; color: inherit; background: var(--page); border: 1px solid var(--rule); border-radius: 7px; padding: 6px 9px; width: 100%; -webkit-user-select: text; user-select: text; }
+#log { font: 11px/1.4 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 180px; overflow: auto; background: var(--pencil-soft); border-radius: 7px; padding: 8px; -webkit-user-select: text; user-select: text; }
+code { font: 12px ui-monospace, Menlo, monospace; }
+#trust-restart { margin-top: 10px; }

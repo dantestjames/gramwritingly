@@ -50,6 +50,7 @@ final class Controller {
 
     func start() {
         trusted = AX.isTrusted(prompt: false)
+        IO.log("started pid=\(getpid()) trusted=\(trusted) path=\(Bundle.main.executablePath ?? "?")")
         IO.send(.ready(trusted: trusted))
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in self?.tick() }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak self] _ in
@@ -87,7 +88,11 @@ final class Controller {
             }
         case .requestTrust:
             trusted = AX.isTrusted(prompt: true)
+            IO.log("trust prompt shown, trusted=\(trusted)")
             IO.send(.trust(trusted: trusted))
+        case .hello:
+            trusted = AX.isTrusted(prompt: false)
+            IO.send(.ready(trusted: trusted))
         case .quit:
             exit(0)
         }
@@ -98,10 +103,13 @@ final class Controller {
     private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
         if !trusted {
-            if now - lastTrustCheck > 2 {
+            if now - lastTrustCheck > 1 {
                 lastTrustCheck = now
                 trusted = AX.isTrusted(prompt: false)
-                if trusted { IO.send(.trust(trusted: true)) }
+                if trusted {
+                    IO.log("accessibility granted")
+                    IO.send(.trust(trusted: true))
+                }
             }
             if !trusted { return }
         }
