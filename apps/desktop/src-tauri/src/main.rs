@@ -24,6 +24,33 @@ struct Helper(Mutex<Option<CommandChild>>, AtomicU64);
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     fn AXIsProcessTrusted() -> u8;
+    fn AXIsProcessTrustedWithOptions(options: core_foundation::dictionary::CFDictionaryRef) -> u8;
+    static kAXTrustedCheckOptionPrompt: core_foundation::string::CFStringRef;
+}
+
+/// Asks macOS for Accessibility access on behalf of the app itself, so the entry in
+/// System Settings is unambiguously "Gramwritingly". The helper inherits it.
+#[tauri::command]
+fn request_trust() -> bool {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        use core_foundation::base::TCFType;
+        use core_foundation::boolean::CFBoolean;
+        use core_foundation::dictionary::CFDictionary;
+        use core_foundation::string::CFString;
+        let key = CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt);
+        let options = CFDictionary::from_CFType_pairs(&[(key, CFBoolean::true_value())]);
+        AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) != 0
+    }
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
+/// Paths and identity details that explain permission problems.
+#[tauri::command]
+fn diagnostics() -> String {
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+    format!("app pid={} exe={} trusted={}", std::process::id(), exe, app_trusted())
 }
 
 /// Whether macOS has given the app itself Accessibility access (for diagnostics).
@@ -129,7 +156,7 @@ fn main() {
             None,
         ))
         .manage(Helper::default())
-        .invoke_handler(tauri::generate_handler![helper_send, helper_start, app_trusted])
+        .invoke_handler(tauri::generate_handler![helper_send, helper_start, app_trusted, request_trust, diagnostics])
         .setup(|app| {
             // Menu bar app: no Dock icon.
             #[cfg(target_os = "macos")]

@@ -92,6 +92,7 @@ final class Controller {
             IO.send(.trust(trusted: trusted))
         case .hello:
             trusted = AX.isTrusted(prompt: false)
+            IO.log("hello pid=\(getpid()) ppid=\(getppid()) trusted=\(trusted) path=\(Bundle.main.executablePath ?? "?")")
             IO.send(.ready(trusted: trusted))
         case .quit:
             exit(0)

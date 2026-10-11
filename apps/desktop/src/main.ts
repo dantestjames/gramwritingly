@@ -112,6 +112,7 @@ async function onHelper(raw: string) {
       log(`helper ${msg.type}: trusted=${msg.trusted}`);
       if (msg.type === "ready") sendConfig();
       appTrusted = await invoke<boolean>("app_trusted").catch(() => false);
+      log(`app trusted=${appTrusted}`);
       renderStatus();
       break;
     case "text": {
@@ -239,7 +240,12 @@ function bindSettings() {
   isEnabled().then((on) => (autostart.checked = on)).catch(() => undefined);
   autostart.addEventListener("change", () => (autostart.checked ? enable() : disable()).catch(() => undefined));
 
-  $("grant").addEventListener("click", () => send({ type: "request-trust" }));
+  $("grant").addEventListener("click", async () => {
+    // Ask from the app first (adds "Gramwritingly" to the list), then from the checker.
+    const ok = await invoke<boolean>("request_trust").catch(() => false);
+    log(`asked macOS for access from the app: trusted=${ok}`);
+    send({ type: "request-trust" });
+  });
   $("restart").addEventListener("click", () => restartHelper(0));
   $("copy-log").addEventListener("click", () => navigator.clipboard.writeText(logLines.join("\n")).catch(() => undefined));
 
@@ -289,6 +295,7 @@ async function main() {
   await listen("tray-open-editor", () => openUrl(settings.webUrl));
   // The helper usually starts before this page loads, so its first "ready" is missed.
   // Ask it to say hello again; only start a new one if nothing answers.
+  invoke<string>("diagnostics").then(log).catch(() => undefined);
   send({ type: "hello" });
   setTimeout(() => {
     if (!helperAlive) restartHelper(0);
