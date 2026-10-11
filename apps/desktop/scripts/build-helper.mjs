@@ -23,13 +23,17 @@ if (universal) args.push("--arch", "arm64", "--arch", "x86_64");
 run("swift", args, { cwd: pkg });
 
 const binPath = execFileSync("swift", [...args.slice(0, 3), ...args.slice(5), "--show-bin-path"], { cwd: pkg }).toString().trim();
-const triple = universal
-  ? "universal-apple-darwin"
-  : execFileSync("rustc", ["--print", "host-tuple"]).toString().trim();
+// A universal Tauri build compiles each architecture separately and then merges them, so it
+// looks for the sidecar under all three names. The fat binary serves every one of them.
+const triples = universal
+  ? ["universal-apple-darwin", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+  : [execFileSync("rustc", ["-vV"]).toString().match(/host: (\S+)/)[1]];
 
 const out = join(root, "src-tauri", "binaries");
 mkdirSync(out, { recursive: true });
-const dest = join(out, `gw-helper-${triple}`);
-copyFileSync(join(binPath, "gw-helper"), dest);
-chmodSync(dest, 0o755);
-console.log(`gw-helper -> ${dest}`);
+for (const triple of triples) {
+  const dest = join(out, `gw-helper-${triple}`);
+  copyFileSync(join(binPath, "gw-helper"), dest);
+  chmodSync(dest, 0o755);
+  console.log(`gw-helper -> ${dest}`);
+}

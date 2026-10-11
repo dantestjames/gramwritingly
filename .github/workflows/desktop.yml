@@ -96,7 +96,7 @@ jobs:
         run: |
           xcrun safari-web-extension-converter apps/extension/dist/safari \
             --project-location build/safari --app-name "Gramwritingly for Safari" \
-            --bundle-identifier app.gramwritingly.safari --swift --macos-only \
+            --bundle-identifier app.gramwritingly.Gramwritingly-for-Safari --swift --macos-only \
             --no-open --no-prompt --force
       - name: Build (unsigned)
         run: |
