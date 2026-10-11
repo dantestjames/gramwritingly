@@ -151,6 +151,27 @@ describe("accounts, gating and credits", () => {
   });
 });
 
+describe("quota races", () => {
+  it("lets only one of several parallel requests spend the last credit", async () => {
+    const token = await register("race@example.com");
+    const id = (db.prepare("SELECT id FROM users WHERE email = 'race@example.com'").get() as { id: string }).id;
+    db.prepare("INSERT INTO usage (user_id, kind, period, amount) VALUES (?, 'ai_credits', ?, 99)").run(id, new Date().toISOString().slice(0, 7));
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () =>
+        app.inject({ method: "POST", url: "/ai/rewrite", headers: { authorization: `Bearer ${token}` }, payload: { text: "One.", mode: "fix" } }),
+      ),
+    );
+    expect(results.filter((r) => r.statusCode === 200)).toHaveLength(1);
+    expect(results.filter((r) => r.statusCode === 402)).toHaveLength(5);
+  });
+
+  it("bills long unpunctuated text by length", async () => {
+    const { rewriteCredits } = await import("../src/routes/ai.js");
+    expect(rewriteCredits("word ".repeat(400))).toBe(7);
+    expect(rewriteCredits("Short. Two.")).toBe(2);
+  });
+});
+
 describe("Pro features", () => {
   let token = "";
   beforeAll(async () => {

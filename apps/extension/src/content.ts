@@ -16,6 +16,8 @@ let source: CheckReply["source"] = "server";
 let drawQueued = false;
 const dismissed = new Set<string>();
 let snippets: { shortcut: string; body: string }[] = [];
+let expanding = false;
+let resizeObserver: ResizeObserver | null = null;
 
 // ---- Shadow-DOM overlay ---------------------------------------------------
 const host = document.createElement("gramwritingly-overlay");
@@ -79,11 +81,15 @@ function attach(el: HTMLElement) {
   issues = [];
   lastText = "";
   scheduleCheck(50);
-  new ResizeObserver(queueDraw).observe(el);
+  resizeObserver = new ResizeObserver(queueDraw);
+  resizeObserver.observe(el);
   el.addEventListener("scroll", queueDraw, { passive: true });
 }
 
 function detach() {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  field?.el.removeEventListener("scroll", queueDraw);
   field?.destroy();
   field = null;
   issues = [];
@@ -96,7 +102,9 @@ function detach() {
 function onInput(e: Event) {
   if (!field || !(e.target instanceof Node) || !field.el.contains(e.target)) return;
   const text = field.getText();
-  if (expandSnippet(text)) return;
+  // Expand only on typed characters, never on undo, delete or our own insertions.
+  const typed = e instanceof InputEvent && (e.inputType === "insertText" || e.inputType === "insertCompositionText");
+  if (typed && !expanding && expandSnippet(text)) return;
   if (text !== lastText) {
     const d = diffRegion(lastText, text);
     issues = shiftIssues(issues, d.start, d.prevEnd, d.nextEnd - d.prevEnd);
@@ -164,6 +172,7 @@ function draw() {
     badge.style.display = "none";
     return;
   }
+  field.prepare();
   const frag = document.createDocumentFragment();
   for (const issue of issues) {
     const rects = field.rects(issue.offset, issue.offset + issue.length);
@@ -291,6 +300,13 @@ function hideCard() {
 
 function applyFix(issue: Issue, replacement: string) {
   if (!field) return;
+  // The page may have changed the field without an input event; never overwrite the wrong text.
+  const flagged = lastText.slice(issue.offset, issue.offset + issue.length);
+  if (field.getText().slice(issue.offset, issue.offset + issue.length) !== flagged) {
+    hideCard();
+    scheduleCheck(0);
+    return;
+  }
   let start = issue.offset;
   let end = issue.offset + issue.length;
   if (replacement === "") {
@@ -319,6 +335,7 @@ function rewriteSelection(mode: string) {
 async function rewriteRange(start: number, end: number, mode: string) {
   if (!field) return;
   const text = field.getText().slice(start, end);
+  field.prepare();
   const anchor = field.rects(start, end).pop() ?? field.el.getBoundingClientRect();
   card.replaceChildren(el("div", "kind dot-blue", "Rewriting…"));
   positionCard(anchor);
@@ -352,6 +369,11 @@ function expandSnippet(text: string): boolean {
   const before = text.slice(0, sel.start);
   const hit = snippets.find((s) => before.endsWith(s.shortcut) && (before.length === s.shortcut.length || /\s/.test(before[before.length - s.shortcut.length - 1]!)));
   if (!hit) return false;
-  field.replace(sel.start - hit.shortcut.length, sel.start, hit.body);
+  expanding = true;
+  try {
+    field.replace(sel.start - hit.shortcut.length, sel.start, hit.body);
+  } finally {
+    expanding = false;
+  }
   return true;
 }

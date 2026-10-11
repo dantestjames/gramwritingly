@@ -60,12 +60,25 @@ export function App() {
   const [modal, setModal] = useState<"auth" | "upgrade" | "settings" | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [explorer, setExplorer] = useState<{ word: string; start: number; end: number; words: string[] | null } | null>(null);
+  const latest = useRef({ docId, title, text, documentType, language, storyCanvas, signedIn: false });
   const editor = useRef<EditorHandle>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const plan = me?.plan.id ?? "free";
   const isPro = plan === "pro";
   const signedIn = !!me;
+  latest.current = { docId, title, text, documentType, language, storyCanvas, signedIn };
+
+  /** Saves the open document right away (used before switching away from it). */
+  const flushSave = useCallback(async () => {
+    const l = latest.current;
+    if (!l.docId || !l.signedIn) return;
+    try {
+      await Api.saveDocument(l.docId, { title: l.title, content: l.text, documentType: l.documentType, language: l.language, storyCanvas: l.storyCanvas });
+    } catch {
+      /* the debounced save will report errors */
+    }
+  }, []);
 
   const { result, issues, counts, grammarStatus } = useAnalysis(text, {
     language, documentType, plan, dictionary, styleGuide, dismissed,
@@ -139,6 +152,7 @@ export function App() {
   }
 
   async function openDoc(id: string) {
+    await flushSave();
     const d = await Api.document(id);
     setDocId(d.id);
     setTitle(d.title);
@@ -149,7 +163,8 @@ export function App() {
     setDismissed(new Set());
   }
 
-  function newDoc() {
+  async function newDoc() {
+    await flushSave();
     setDocId(null);
     setTitle("Untitled");
     setText("");
@@ -166,7 +181,12 @@ export function App() {
     requestAnimationFrame(() => editor.current?.select(start + replacement.length, start + replacement.length));
   }
 
-  function replaceRange(start: number, end: number, value: string) {
+  /** Replaces text[start, end). When `expected` is given, refuses if that text has since changed. */
+  function replaceRange(start: number, end: number, value: string, expected?: string) {
+    if (expected !== undefined && text.slice(start, end) !== expected) {
+      showToast("That text changed while the suggestion was loading. Try again.");
+      return;
+    }
     setText(text.slice(0, start) + value + text.slice(end));
     requestAnimationFrame(() => editor.current?.select(start, start + value.length));
   }
@@ -337,7 +357,7 @@ export function App() {
                   {explorer.words === null ? <p className="muted">Looking up…</p> : explorer.words.length === 0 ? <p className="muted">No alternatives found.</p> : (
                     <div className="chips">
                       {explorer.words.map((w) => (
-                        <button key={w} className="chip" onClick={() => { replaceRange(explorer.start, explorer.end, w); setExplorer(null); }}>{w}</button>
+                        <button key={w} className="chip" onClick={() => { replaceRange(explorer.start, explorer.end, w, explorer.word); setExplorer(null); }}>{w}</button>
                       ))}
                     </div>
                   )}
@@ -398,7 +418,7 @@ export function App() {
           me={me}
           onClose={() => setModal(null)}
           onChanged={refreshMe}
-          onSignOut={() => { setToken(null); setMe(null); setDocs([]); setDocId(null); setStyleGuide(undefined); setDictionary([]); setModal(null); }}
+          onSignOut={async () => { await flushSave(); setToken(null); setMe(null); setDocs([]); setDocId(null); setStyleGuide(undefined); setDictionary([]); setModal(null); }}
         />
       )}
     </div>

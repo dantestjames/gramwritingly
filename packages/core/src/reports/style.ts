@@ -70,48 +70,55 @@ export function overusedWords(text: string): ReportResult {
   };
 }
 
-/** Repeated 3 and 4 word phrases anywhere in the text. */
+/** Repeated 3 and 4 word phrases anywhere in the text. Linear time: each word is claimed once. */
 export function repeats(text: string): ReportResult {
   const ws = words(text).filter((w) => isWord(w.text));
+  const lower = ws.map((w) => w.text.toLowerCase());
   const issues: Issue[] = [];
-  const seen = new Map<string, { start: number; end: number }[]>();
+  const claimed = new Uint8Array(ws.length);
+  let phraseCount = 0;
   for (const n of [4, 3]) {
+    const seen = new Map<string, number[]>();
     for (let i = 0; i + n <= ws.length; i++) {
-      const slice = ws.slice(i, i + n);
-      const key = slice.map((w) => w.text.toLowerCase()).join(" ");
-      const content = slice.filter((w) => !GLUE_WORDS.has(w.text.toLowerCase())).length;
+      let content = 0;
+      for (let k = i; k < i + n; k++) if (!GLUE_WORDS.has(lower[k]!)) content++;
       if (content < 2) continue;
-      const span = { start: slice[0]!.start, end: slice[n - 1]!.end };
-      // Skip if it crosses a sentence end (". ")
-      if (/[.!?]\s/.test(text.slice(span.start, span.end))) continue;
-      const list = seen.get(key) ?? [];
-      list.push(span);
-      seen.set(key, list);
+      // Skip phrases that cross a sentence end.
+      if (/[.!?]\s/.test(text.slice(ws[i]!.start, ws[i + n - 1]!.end))) continue;
+      const key = lower.slice(i, i + n).join(" ");
+      const list = seen.get(key);
+      if (list) {
+        if (list.length < 50) list.push(i);
+      } else seen.set(key, [i]);
+    }
+    for (const [key, starts] of seen) {
+      if (starts.length < 2) continue;
+      // Drop occurrences already covered by a longer repeated phrase.
+      const fresh = starts.filter((i) => {
+        for (let k = i; k < i + n; k++) if (!claimed[k]) return true;
+        return false;
+      });
+      if (fresh.length < 2) continue;
+      phraseCount++;
+      for (const i of fresh) {
+        claimed.fill(1, i, i + n);
+        const s = ws[i]!.start;
+        issues.push(
+          makeIssue({
+            offset: s, length: ws[i + n - 1]!.end - s, rule: "repeated-phrase", category: "style", report: "repeats",
+            title: "Repeated phrase",
+            message: `"${key}" appears ${starts.length} times. Rephrase one.`,
+          }),
+        );
+      }
     }
   }
-  const covered: { start: number; end: number }[] = [];
-  const phrases: string[] = [];
-  for (const [key, spans] of [...seen].sort((a, b) => b[0].length - a[0].length)) {
-    if (spans.length < 2) continue;
-    const fresh = spans.filter((s) => !covered.some((c) => s.start >= c.start && s.end <= c.end));
-    if (fresh.length < 2) continue;
-    phrases.push(key);
-    for (const s of fresh) {
-      covered.push(s);
-      issues.push(
-        makeIssue({
-          offset: s.start, length: s.end - s.start, rule: "repeated-phrase", category: "style", report: "repeats",
-          title: "Repeated phrase",
-          message: `"${key}" appears ${spans.length} times. Rephrase one.`,
-        }),
-      );
-    }
-  }
+  issues.sort((a, b) => a.offset - b.offset);
   return {
     id: "repeats", title: "Repeats",
-    summary: phrases.length ? `${phrases.length} repeated phrase${phrases.length === 1 ? "" : "s"}.` : "No repeated phrases.",
-    score: score(100 - phrases.length * 6),
-    issues, metrics: { repeatedPhrases: phrases.length },
+    summary: phraseCount ? `${phraseCount} repeated phrase${phraseCount === 1 ? "" : "s"}.` : "No repeated phrases.",
+    score: score(100 - phraseCount * 6),
+    issues, metrics: { repeatedPhrases: phraseCount },
   };
 }
 

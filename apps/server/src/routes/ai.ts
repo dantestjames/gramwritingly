@@ -6,7 +6,7 @@ import {
   critiquePrompt, detectPrompt, feedbackPrompt, parseJson, REWRITE_MODES, rewritePrompt, SPARK_KINDS, sparkPrompt,
   synonymsPrompt, type RewriteMode, type SparkKind,
 } from "../services/ai.js";
-import { addUsage, assertQuota, getUsage } from "../services/usage.js";
+import { getUsage, reserve } from "../services/usage.js";
 import { LanguageSchema } from "./check.js";
 
 const Rewrite = z.object({
@@ -57,12 +57,14 @@ export function aiRoutes(app: FastifyInstance, { db, ai }: Deps) {
       const feature = body.mode === "custom" ? "aiCustomRequest" : body.mode === "fluency" ? "aiFluency" : "aiToneAdjust";
       requireFeature(user, feature);
     }
-    const credits = Math.max(1, sentences(body.text).length);
-    assertQuota(db, user.id, "ai_credits", PLANS[user.plan].limits.aiCreditsPerMonth, credits);
+    const credits = rewriteCredits(body.text);
+    const refund = reserve(db, user.id, "ai_credits", PLANS[user.plan].limits.aiCreditsPerMonth, credits);
     const p = rewritePrompt(body.mode, body.text, lang(body.language, user.settings.language), body.instruction, user.settings.voiceSample);
-    const raw = await ai.complete({ tier: "fast", ...p, maxTokens: Math.min(4000, 400 + body.text.length) });
-    const out = parseJson<{ variants: string[]; explanation?: string }>(raw);
-    addUsage(db, user.id, "ai_credits", credits);
+    const out = await guarded(refund, async () =>
+      parseJson<{ variants: string[]; explanation?: string }>(
+        await ai.complete({ tier: "fast", ...p, maxTokens: Math.min(4000, 400 + body.text.length) }),
+      ),
+    );
     return {
       variants: (out.variants ?? []).filter((v) => typeof v === "string" && v.trim()).slice(0, 3),
       explanation: out.explanation ?? "",
@@ -75,36 +77,31 @@ export function aiRoutes(app: FastifyInstance, { db, ai }: Deps) {
     const user = requireUser(req);
     requireFeature(user, "documentFeedback");
     const body = Feedback.parse(req.body);
-    assertQuota(db, user.id, "feedback", FEEDBACK_PER_DAY);
+    const refund = reserve(db, user.id, "feedback", FEEDBACK_PER_DAY);
     const p = feedbackPrompt(body.text, body.documentType ?? "general", lang(body.language, user.settings.language));
-    const out = parseJson(await ai.complete({ tier: "deep", ...p, maxTokens: 3000 }));
-    addUsage(db, user.id, "feedback", 1);
-    return out;
+    return guarded(refund, async () => parseJson(await ai.complete({ tier: "deep", ...p, maxTokens: 3000 })));
   });
 
   app.post("/ai/critique", async (req) => {
     const user = requireUser(req);
     requireFeature(user, "chapterCritique");
     const body = Critique.parse(req.body);
-    assertQuota(db, user.id, "critiques", PLANS[user.plan].limits.chapterCritiquesPerDay);
+    const refund = reserve(db, user.id, "critiques", PLANS[user.plan].limits.chapterCritiquesPerDay);
     const p = critiquePrompt(body.text, body.genre ?? "", lang(body.language, user.settings.language));
-    const out = parseJson(await ai.complete({ tier: "deep", ...p, maxTokens: 3500 }));
-    addUsage(db, user.id, "critiques", 1);
-    return out;
+    return guarded(refund, async () => parseJson(await ai.complete({ tier: "deep", ...p, maxTokens: 3500 })));
   });
 
   app.post("/ai/sparks", async (req) => {
     const user = requireUser(req);
     requireFeature(user, "aiSparks");
     const body = Spark.parse(req.body);
-    assertQuota(db, user.id, "sparks", PLANS[user.plan].limits.sparksPerDay);
+    const refund = reserve(db, user.id, "sparks", PLANS[user.plan].limits.sparksPerDay);
     const p = sparkPrompt(body.kind, body.text, lang(body.language, user.settings.language));
-    const out = parseJson<{ ideas: string[] }>(await ai.complete({ tier: "fast", ...p, maxTokens: 1200 }));
-    addUsage(db, user.id, "sparks", 1);
+    const out = await guarded(refund, async () => parseJson<{ ideas: string[] }>(await ai.complete({ tier: "fast", ...p, maxTokens: 1200 })));
     return { ideas: out.ideas ?? [] };
   });
 
-  app.post("/ai/synonyms", async (req) => {
+  app.post("/ai/synonyms", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req) => {
     const user = requireUser(req);
     requireFeature(user, "aiSynonyms");
     const body = Synonyms.parse(req.body);
@@ -117,7 +114,11 @@ export function aiRoutes(app: FastifyInstance, { db, ai }: Deps) {
     const user = requireUser(req);
     requireFeature(user, "aiDetection");
     const body = Detect.parse(req.body);
-    const out = parseJson<{ likelihood: number }>(await ai.complete({ tier: "deep", ...detectPrompt(body.text), maxTokens: 1500 }));
+    // Detection reads the whole text with the deep model, so it is billed like a rewrite.
+    const refund = reserve(db, user.id, "ai_credits", PLANS[user.plan].limits.aiCreditsPerMonth, rewriteCredits(body.text));
+    const out = await guarded(refund, async () =>
+      parseJson<{ likelihood: number }>(await ai.complete({ tier: "deep", ...detectPrompt(body.text), maxTokens: 1500 })),
+    );
     return {
       ...out,
       note: "AI detection is an estimate, not proof. Never use it as the only basis for a decision about someone's work.",
@@ -138,6 +139,21 @@ export function aiRoutes(app: FastifyInstance, { db, ai }: Deps) {
     thesaurusCache.set(key, synonyms);
     return { word, synonyms };
   });
+}
+
+/** One credit per sentence, or per 300 characters for text without full stops. */
+export function rewriteCredits(text: string) {
+  return Math.max(1, sentences(text).length, Math.ceil(text.length / 300));
+}
+
+/** Runs an external call and refunds the reserved usage if it fails. */
+async function guarded<T>(refund: () => void, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    refund();
+    throw err;
+  }
 }
 
 function remaining(limit: number, used: number) {

@@ -34,10 +34,10 @@ export function StatsPanel({ result, counts }: Props) {
         <section className="hem-list" aria-label="Readability highlights">
           <HemRow kind="very-hard" n={Number(hm.veryHard)} label={`of ${sentences} sentences are very hard to read`} />
           <HemRow kind="hard" n={Number(hm.hard)} label={`of ${sentences} sentences are hard to read`} />
-          <HemRow kind="simpler" n={Number(hm.simpler)} label="phrases have simpler alternatives" />
-          <HemRow kind="adverb" n={Number(hm.adverbs)} label={`adverbs. Aim for ${adverbTarget} or fewer`} warn={Number(hm.adverbs) > adverbTarget} />
-          <HemRow kind="passive" n={Number(hm.passive)} label={`uses of passive voice. Aim for ${passiveTarget} or fewer`} warn={Number(hm.passive) > passiveTarget} />
-          <HemRow kind="weak" n={Number(hm.qualifiers)} label="weakening phrases" />
+          <HemRow kind="simpler" n={Number(hm.simpler)} label={Number(hm.simpler) === 1 ? "phrase has a simpler alternative" : "phrases have simpler alternatives"} />
+          <HemRow kind="adverb" n={Number(hm.adverbs)} label={`${plural(Number(hm.adverbs), "adverb")}. Aim for ${adverbTarget} or fewer`} warn={Number(hm.adverbs) > adverbTarget} />
+          <HemRow kind="passive" n={Number(hm.passive)} label={`${plural(Number(hm.passive), "use")} of passive voice. Aim for ${passiveTarget} or fewer`} warn={Number(hm.passive) > passiveTarget} />
+          <HemRow kind="weak" n={Number(hm.qualifiers)} label={plural(Number(hm.qualifiers), "weakening phrase")} />
         </section>
       )}
 
@@ -92,6 +92,10 @@ function HemRow({ kind, n, label, warn }: { kind: string; n: number; label: stri
       <b>{n}</b> <span>{label}</span>
     </div>
   );
+}
+
+function plural(n: number, word: string) {
+  return n === 1 ? word : `${word}s`;
 }
 
 function fmtMinutes(m: number) {

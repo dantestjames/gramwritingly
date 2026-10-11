@@ -45,6 +45,7 @@ export function useAnalysis(
       abort.current = ctrl;
       if (!text.trim()) {
         setServerIssues([]);
+        setGrammarStatus("ok");
         return;
       }
       setGrammarStatus("checking");
@@ -57,22 +58,43 @@ export function useAnalysis(
         setGrammarStatus(err instanceof ApiError && err.code === "offline" ? "offline" : "unavailable");
       }
     }, 700);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      // A reply for older text would land on the wrong offsets, so cancel it.
+      abort.current?.abort();
+    };
   }, [text, opts.language, opts.documentType]);
+
+  // Local analysis is instant for normal documents. Very long ones are analysed after a short
+  // pause and their issues shifted onto the live text in the meantime.
+  const long = text.length > 20_000;
+  const [analysedText, setAnalysedText] = useState(text);
+  useEffect(() => {
+    if (!long) return setAnalysedText(text);
+    const h = setTimeout(() => setAnalysedText(text), 400);
+    return () => clearTimeout(h);
+  }, [text, long]);
+  const source = long ? analysedText : text;
 
   const local = useMemo(
     () =>
-      analyse(text, {
+      analyse(source, {
         language: opts.language, documentType: opts.documentType, plan: opts.plan, dictionary: opts.dictionary,
         styleGuide: opts.styleGuide,
       }),
-    [text, opts.language, opts.documentType, opts.plan, opts.dictionary, opts.styleGuide],
+    [source, opts.language, opts.documentType, opts.plan, opts.dictionary, opts.styleGuide],
   );
 
+  const localIssues = useMemo(() => {
+    if (source === text) return local.issues;
+    const d = diffRegion(source, text);
+    return shiftIssues(local.issues, d.start, d.prevEnd, d.nextEnd - d.prevEnd);
+  }, [local.issues, source, text]);
+
   const issues = useMemo(() => {
-    const merged = mergeIssues(serverIssues, local.issues);
+    const merged = mergeIssues(serverIssues, localIssues);
     return merged.filter((i) => !opts.dismissed.has(dismissKey(text, i)));
-  }, [serverIssues, local.issues, opts.dismissed, text]);
+  }, [serverIssues, localIssues, opts.dismissed, text]);
 
   const counts = useMemo(
     () => ({

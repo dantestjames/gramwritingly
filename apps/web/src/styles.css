@@ -45,6 +45,7 @@
     --hl-weak: #2c3644;
     color-scheme: dark;
   }
+  .btn-primary, .chip-fix, .chip-fix:hover { color: #0d1526; }
 }
 
 * { box-sizing: border-box; }
@@ -204,8 +205,8 @@ select { border: 1px solid var(--rule); border-radius: 8px; background: var(--pa
 .tone { border: 1px solid var(--rule); border-radius: 999px; padding: 3px 10px; font-size: 13px; }
 .goals { list-style: none; margin: 0; padding: 0; }
 .goals li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
-.goals li.met span:first-child::before { content: "✓ "; color: var(--green); }
-.goals li.miss span:first-child::before { content: "• "; color: var(--proof); }
+.goals li.met > span:first-child::before { content: "✓ "; color: var(--green); }
+.goals li.miss > span:first-child::before { content: "• "; color: var(--proof); }
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; font-size: 14px; }
 .kv dt { color: var(--ink-soft); }
 .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

@@ -8,7 +8,7 @@ interface Props {
   documentType: string;
   signedIn: boolean;
   isPro: boolean;
-  onReplace(start: number, end: number, value: string): void;
+  onReplace(start: number, end: number, value: string, expected?: string): void;
   onInsert(value: string): void;
   onNeedSignIn(): void;
   onUpgrade(): void;
@@ -38,7 +38,7 @@ const SPARKS = [
 ];
 
 type Result =
-  | { kind: "variants"; start: number; end: number; variants: string[]; explanation: string }
+  | { kind: "variants"; start: number; end: number; original: string; variants: string[]; explanation: string }
   | { kind: "ideas"; ideas: string[] }
   | { kind: "json"; title: string; data: Record<string, unknown> }
   | { kind: "plagiarism"; score: number; matches: { url: string; title: string; matchedWords: number }[] };
@@ -69,7 +69,7 @@ export function AiPanel(p: Props) {
     const chunk = p.text.slice(start, end);
     if (!chunk.trim()) return p.onToast("Select some text first, or put your cursor in a paragraph.");
     run(mode, () => Api.rewrite(chunk, mode, instruction, p.language), (r) =>
-      setResult({ kind: "variants", start, end, variants: r.variants, explanation: r.explanation }),
+      setResult({ kind: "variants", start, end, original: chunk, variants: r.variants, explanation: r.explanation }),
     );
   }
 
@@ -170,7 +170,7 @@ function ResultView({ result, p, onClose }: { result: Result; p: Props; onClose(
           {result.variants.map((v, i) => (
             <div className="variant" key={i}>
               <p>{v}</p>
-              <button className="btn btn-small btn-primary" onClick={() => { p.onReplace(result.start, result.end, v); onClose(); }}>Use this</button>
+              <button className="btn btn-small btn-primary" onClick={() => { p.onReplace(result.start, result.end, v, result.original); onClose(); }}>Use this</button>
             </div>
           ))}
         </>

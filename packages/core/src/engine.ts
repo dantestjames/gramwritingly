@@ -78,6 +78,8 @@ export function analyse(fullText: string, opts: AnalyseOptions = {}): AnalysisRe
   const s = stats(fullText);
   const r = readability(fullText, s);
   const hem = hemingway(text);
+  // Hemingway counts cover the analysed (possibly truncated) text, so rates use its word count.
+  const analysedWords = truncated ? stats(text).words : s.words;
 
   const builders: Partial<Record<ReportId, () => ReportResult>> = {
     hemingway: () => ({
@@ -129,7 +131,7 @@ export function analyse(fullText: string, opts: AnalyseOptions = {}): AnalysisRe
       return {
         id: "style", title: REPORT_TITLES.style,
         summary: `${qual.length} weak phrase${qual.length === 1 ? "" : "s"}, ${hem.summary.adverbs} adverbs, ${hem.summary.passive} passive.`,
-        score: score(100 - per1000(qual.length + hem.summary.adverbs + hem.summary.passive, s.words)),
+        score: score(100 - per1000(qual.length + hem.summary.adverbs + hem.summary.passive, analysedWords)),
         issues: qual, metrics: { qualifiers: qual.length, adverbs: hem.summary.adverbs, passive: hem.summary.passive },
       };
     },
@@ -186,7 +188,7 @@ export function analyse(fullText: string, opts: AnalyseOptions = {}): AnalysisRe
     for (const i of applyStyleGuide(fullText, opts.styleGuide)) inline.set(i.id, i);
   }
 
-  const goals = checkGoals(documentType, r.grade, s, hem.summary, reports);
+  const goals = checkGoals(documentType, r.grade, s, analysedWords, hem.summary, reports);
   const scores = Object.values(reports)
     .filter((x): x is ReportResult => !!x && !("locked" in x) && typeof x.score === "number")
     .map((x) => x.score!);
@@ -210,6 +212,7 @@ function checkGoals(
   type: DocumentType,
   grade: number,
   s: TextStats,
+  analysedWords: number,
   hem: ReturnType<typeof hemingway>["summary"],
   reports: AnalysisResult["reports"],
 ): GoalCheck[] {
@@ -220,8 +223,8 @@ function checkGoals(
     { label: "Readability grade", value: grade, target: g.maxGrade, met: grade <= g.maxGrade },
     { label: "Average sentence length", value: s.avgWordsPerSentence, target: g.maxAvgSentence, met: s.avgWordsPerSentence <= g.maxAvgSentence, unit: "words" },
     {
-      label: "Adverbs per 1,000 words", value: Math.round(per1000(hem.adverbs, s.words)), target: g.maxAdverbsPer1000,
-      met: per1000(hem.adverbs, s.words) <= g.maxAdverbsPer1000,
+      label: "Adverbs per 1,000 words", value: Math.round(per1000(hem.adverbs, analysedWords)), target: g.maxAdverbsPer1000,
+      met: per1000(hem.adverbs, analysedWords) <= g.maxAdverbsPer1000,
     },
     {
       label: "Passive sentences", value: pct(hem.passive, Math.max(1, hem.sentences)), target: g.maxPassivePct,

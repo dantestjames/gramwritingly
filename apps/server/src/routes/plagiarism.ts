@@ -3,7 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { HttpError, requireFeature, requireUser, type Deps } from "../lib/context.js";
-import { addUsage, assertQuota } from "../services/usage.js";
+import { reserve } from "../services/usage.js";
 
 const Submit = z.object({ text: z.string().min(1).max(100_000) });
 
@@ -19,7 +19,7 @@ export function plagiarismRoutes(app: FastifyInstance, { db, plagiarism, config 
     }
     const { text } = Submit.parse(req.body);
     if (words(text).length < 15) throw new HttpError(400, "too_short", "Add at least 15 words to check for plagiarism.");
-    assertQuota(db, user.id, "plagiarism", PLANS[user.plan].limits.plagiarismScansPerMonth);
+    const refund = reserve(db, user.id, "plagiarism", PLANS[user.plan].limits.plagiarismScansPerMonth);
     const scanId = randomUUID().replace(/-/g, "").slice(0, 30);
     db.prepare("INSERT INTO plagiarism_scans (id, user_id) VALUES (?, ?)").run(scanId, user.id);
     const callback = `${config.publicApiUrl}/webhooks/${plagiarism.name}/{STATUS}/${scanId}/${sign(scanId)}`;
@@ -27,9 +27,9 @@ export function plagiarismRoutes(app: FastifyInstance, { db, plagiarism, config 
       await plagiarism.submit(scanId, text, callback);
     } catch (err) {
       db.prepare("UPDATE plagiarism_scans SET status = 'error' WHERE id = ?").run(scanId);
+      refund();
       throw err;
     }
-    addUsage(db, user.id, "plagiarism", 1);
     return { scanId, status: "pending" };
   });
 

@@ -29,7 +29,8 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
     throw new ApiFailure("Can't reach the Gramwritingly server.", "offline");
   }
   const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-  if (res.status === 401 && s.token) await saveSettings({ token: null });
+  // An expired session clears the token; a wrong password on the sign-in form must not.
+  if (res.status === 401 && s.token && !path.startsWith("/auth/")) await saveSettings({ token: null });
   if (!res.ok) throw new ApiFailure(data.message ?? `Request failed (${res.status})`, data.error);
   return data as T;
 }

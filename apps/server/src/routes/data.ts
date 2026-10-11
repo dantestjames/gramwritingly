@@ -123,7 +123,7 @@ export function dataRoutes(app: FastifyInstance, { db }: Deps) {
   app.delete("/dictionary/:word", async (req) => {
     const user = requireUser(req);
     const { word } = req.params as { word: string };
-    db.prepare("DELETE FROM dictionary WHERE user_id = ? AND word = ?").run(user.id, decodeURIComponent(word));
+    db.prepare("DELETE FROM dictionary WHERE user_id = ? AND word = ?").run(user.id, word);
     return { deleted: true };
   });
 

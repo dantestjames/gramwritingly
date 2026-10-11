@@ -39,7 +39,17 @@ const targets = {
   firefox: {
     ...base,
     background: { scripts: ["background.js"] },
-    browser_specific_settings: { gecko: { id: "extension@gramwritingly.app", strict_min_version: "121.0" } },
+    browser_specific_settings: {
+      gecko: {
+        id: "extension@gramwritingly.app",
+        strict_min_version: "140.0",
+        // Text typed into pages is sent to the user's Gramwritingly server for checking.
+        data_collection_permissions: {
+          required: ["websiteContent", "personalCommunications"],
+          optional: ["authenticationInfo"],
+        },
+      },
+    },
   },
   safari: { ...base, background: { service_worker: "background.js" } },
 };
@@ -51,7 +61,7 @@ async function bundle(outdir) {
     entryPoints: entries,
     bundle: true,
     format: "iife",
-    target: ["chrome116", "firefox121", "safari16"],
+    target: ["chrome116", "firefox140", "safari16"],
     outdir,
     minify: !watch,
     sourcemap: watch ? "inline" : false,

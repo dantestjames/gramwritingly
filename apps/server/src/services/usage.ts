@@ -32,6 +32,22 @@ export class QuotaError extends Error {
   }
 }
 
+/**
+ * Checks the limit and records the usage in one synchronous step, so parallel requests
+ * can't all slip under the limit while a slow AI or plagiarism call is in flight.
+ * Returns a refund function to call if the external call fails.
+ */
+export function reserve(db: DB, userId: string, kind: UsageKind, limit: number, cost = 1): () => void {
+  assertQuota(db, userId, kind, limit, cost);
+  addUsage(db, userId, kind, cost);
+  let refunded = false;
+  return () => {
+    if (refunded) return;
+    refunded = true;
+    addUsage(db, userId, kind, -cost);
+  };
+}
+
 /** Throws QuotaError when the request would go over the limit. */
 export function assertQuota(db: DB, userId: string, kind: UsageKind, limit: number, cost = 1) {
   if (!Number.isFinite(limit)) return;

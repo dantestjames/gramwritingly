@@ -7,6 +7,8 @@
 export interface TextField {
   el: HTMLElement;
   getText(): string;
+  /** Refreshes measurement state. Call once per draw, before rects(). */
+  prepare(): void;
   /** Viewport rectangles covering text[start, end). */
   rects(start: number, end: number): DOMRect[];
   /** Replace text[start, end) in a way the host page notices (keeps undo where possible). */
@@ -73,11 +75,17 @@ class PlainField implements TextField {
     return this.el.value;
   }
 
-  private sync() {
+  prepare() {
     const cs = getComputedStyle(this.el);
     const m = this.mirror.style;
     for (const k of COPY_STYLES) (m as unknown as Record<string, string>)[k] = cs[k] as string;
     const r = this.el.getBoundingClientRect();
+    // We size the mirror with the border-box rect, so it must use border-box sizing too,
+    // and reserve the textarea's scrollbar width so lines wrap at the same place.
+    m.boxSizing = "border-box";
+    const borderX = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+    const scrollbar = Math.max(0, this.el.offsetWidth - this.el.clientWidth - borderX);
+    m.paddingRight = `${parseFloat(cs.paddingRight) + scrollbar}px`;
     m.position = "fixed";
     m.left = `${r.left}px`;
     m.top = `${r.top}px`;
@@ -100,7 +108,6 @@ class PlainField implements TextField {
   }
 
   rects(start: number, end: number): DOMRect[] {
-    this.sync();
     const node = this.mirror.firstChild;
     if (!node) return [];
     const range = document.createRange();
@@ -174,6 +181,10 @@ class RichField implements TextField {
   getText() {
     this.build();
     return this.text;
+  }
+
+  prepare() {
+    this.build();
   }
 
   private locate(offset: number): { node: Text; offset: number } | null {
