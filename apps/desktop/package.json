@@ -1,0 +1,28 @@
+{
+  "name": "@gramwritingly/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vite": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "tauri": "tauri",
+    "helper:build": "node scripts/build-helper.mjs",
+    "app:dev": "pnpm helper:build && tauri dev",
+    "app:build": "pnpm helper:build && tauri build"
+  },
+  "dependencies": {
+    "@gramwritingly/core": "workspace:*",
+    "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-autostart": "^2.7.0",
+    "@tauri-apps/plugin-opener": "^2.7.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^4.0.0"
+  }
+}
