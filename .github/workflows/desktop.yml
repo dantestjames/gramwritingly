@@ -23,7 +23,7 @@ jobs:
     name: Swift helper tests
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Test GWHelperCore
         working-directory: apps/desktop/helpers/macos
         run: swift test
@@ -36,9 +36,9 @@ jobs:
     needs: helper-tests
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -68,7 +68,7 @@ jobs:
           for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             if [ -z "${!v}" ]; then unset "$v"; fi
           done
-          pnpm tauri build --target universal-apple-darwin --bundles app,dmg
+          ../../.github/scripts/report.sh pnpm tauri build --target universal-apple-darwin --bundles app,dmg
       - uses: actions/upload-artifact@v4
         with:
           name: Gramwritingly-macOS
@@ -83,9 +83,9 @@ jobs:
     name: Safari extension
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -102,7 +102,7 @@ jobs:
         run: |
           PROJECT=$(find build/safari -name "*.xcodeproj" -maxdepth 3 | head -1)
           SCHEME=$(xcodebuild -list -json -project "$PROJECT" | python3 -c "import json,sys; print(json.load(sys.stdin)['project']['schemes'][0])")
-          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+          .github/scripts/report.sh xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
             -derivedDataPath build/derived CODE_SIGNING_ALLOWED=NO build
           ditto -c -k --keepParent "$(find build/derived -name '*.app' -path '*Release*' | head -1)" build/Gramwritingly-Safari.zip
       - uses: actions/upload-artifact@v4
