@@ -12,3 +12,8 @@ apps/desktop/src-tauri/target/
 .DS_Store
 coverage/
 out/
+apps/desktop/dist/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/binaries/gw-helper-*
+apps/desktop/helpers/macos/.build/
+apps/desktop/helpers/macos/.swiftpm/

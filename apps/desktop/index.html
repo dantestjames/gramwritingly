@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gramwritingly</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <img src="/icon.png" width="28" height="28" alt="" />
+      <h1>Gramwritingly</h1>
+      <label class="switch" title="Check writing in other apps">
+        <input type="checkbox" id="enabled" />
+        <span>On</span>
+      </label>
+    </header>
+
+    <section id="trust" hidden>
+      <h2>Let Gramwritingly see your text</h2>
+      <p>To underline mistakes in Mail, Word, Notes and other apps, macOS needs you to allow Accessibility access.</p>
+      <ol>
+        <li>Choose <b>Open settings</b> below.</li>
+        <li>Turn on <b>Gramwritingly</b> in the list.</li>
+        <li>Come back here. It updates on its own.</li>
+      </ol>
+      <button id="grant" class="primary">Open settings</button>
+    </section>
+
+    <section id="status-box">
+      <p id="status">Starting…</p>
+      <p id="app-line" class="muted"></p>
+    </section>
+
+    <section>
+      <h2>Account</h2>
+      <div id="signed-out">
+        <form id="login">
+          <input id="email" type="email" placeholder="Email" autocomplete="email" required />
+          <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
+          <button class="primary">Sign in</button>
+        </form>
+        <p class="muted">Signing in adds your dictionary, style guide and AI rewrites.</p>
+      </div>
+      <div id="signed-in" hidden>
+        <p><span id="who"></span> <span id="plan" class="pill"></span></p>
+        <button id="logout" class="link">Sign out</button>
+      </div>
+      <p id="error" class="error" role="alert"></p>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <label class="row">
+        <span>Language</span>
+        <select id="language">
+          <option value="en-AU">English (Australia)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-NZ">English (New Zealand)</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-CA">English (Canada)</option>
+          <option value="en-ZA">English (South Africa)</option>
+        </select>
+      </label>
+      <label class="row"><span>Open at login</span><input type="checkbox" id="autostart" /></label>
+      <label class="stack">
+        <span>Skip these apps</span>
+        <textarea id="disabled-apps" rows="3" placeholder="One bundle ID per line, e.g. com.apple.Terminal"></textarea>
+      </label>
+      <details>
+        <summary>Server</summary>
+        <label class="stack"><span>API address</span><input id="api-url" type="url" /></label>
+        <label class="stack"><span>Editor address</span><input id="web-url" type="url" /></label>
+      </details>
+    </section>
+
+    <footer>
+      <button id="open-editor" class="link">Open the web editor</button>
+      <span class="muted">Browsers use the Gramwritingly extension.</span>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

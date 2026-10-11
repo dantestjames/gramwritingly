@@ -1,0 +1,111 @@
+name: Desktop (macOS)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "apps/desktop/**"
+      - "apps/extension/**"
+      - "packages/core/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  helper-tests:
+    name: Swift helper tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test GWHelperCore
+        working-directory: apps/desktop/helpers/macos
+        run: swift test
+      - name: Build helper (debug)
+        working-directory: apps/desktop/helpers/macos
+        run: swift build --product gw-helper
+
+  app:
+    name: Build the Mac app
+    needs: helper-tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gramwritingly/core build
+      - run: pnpm --filter @gramwritingly/desktop test
+      - name: Build universal helper
+        working-directory: apps/desktop
+        run: node scripts/build-helper.mjs --universal
+      - name: Build app and DMG
+        working-directory: apps/desktop
+        env:
+          # Optional. With these secrets set the app is signed and notarised; without them it is ad-hoc signed.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Missing secrets arrive as empty strings, which would make Tauri try to sign and fail.
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          pnpm tauri build --target universal-apple-darwin --bundles app,dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gramwritingly-macOS
+          path: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+  safari:
+    name: Safari extension
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @gramwritingly/core build
+      - run: pnpm --filter @gramwritingly/extension build
+      - name: Convert to a Safari web extension
+        run: |
+          xcrun safari-web-extension-converter apps/extension/dist/safari \
+            --project-location build/safari --app-name "Gramwritingly for Safari" \
+            --bundle-identifier app.gramwritingly.safari --swift --macos-only \
+            --no-open --no-prompt --force
+      - name: Build (unsigned)
+        run: |
+          PROJECT=$(find build/safari -name "*.xcodeproj" -maxdepth 3 | head -1)
+          SCHEME=$(xcodebuild -list -json -project "$PROJECT" | python3 -c "import json,sys; print(json.load(sys.stdin)['project']['schemes'][0])")
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -derivedDataPath build/derived CODE_SIGNING_ALLOWED=NO build
+          ditto -c -k --keepParent "$(find build/derived -name '*.app' -path '*Release*' | head -1)" build/Gramwritingly-Safari.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gramwritingly-Safari
+          path: build/Gramwritingly-Safari.zip
